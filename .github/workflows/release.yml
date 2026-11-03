@@ -29,52 +29,58 @@ jobs:
       - name: Create PyInstaller spec file
         shell: python
         run: |
-          import os
-          icon_path = os.path.join('src_gui', 'icon.ico')
-          has_icon = os.path.isfile(icon_path)
+          import os, textwrap
 
-          added = []
+          icon_path = os.path.join('src_gui', 'icon.ico').replace('\\', '/')
+          has_icon  = os.path.isfile('src_gui/icon.ico')
+
+          datas = []
           for f in ['switch2ipa.py', 'switch2ipa_gui.py', 'README.md', 'LICENSE']:
               if os.path.isfile(f):
-                  added.append(f"('{f}', '.')")
+                  datas.append(f"('{f}', '.')")
+          datas_str = ', '.join(datas)
 
-          spec = f"""# -*- mode: python ; coding: utf-8 -*-
-          a = Analysis(
-              ['installer_windows.py'],
-              pathex=[],
-              binaries=[],
-              datas=[{', '.join(added)}],
-              hiddenimports=[],
-              hookspath=[],
-              hooksconfig={{}},
-              runtime_hooks=[],
-              excludes=[],
-              noarchive=False,
-          )
-          pyz = PYZ(a.pure)
-          exe = EXE(
-              pyz,
-              a.scripts,
-              a.binaries,
-              a.datas,
-              [],
-              name='NSWPORTIOS_Setup',
-              debug=False,
-              bootloader_ignore_signals=False,
-              strip=False,
-              upx=True,
-              console=True,
-              {"icon='" + icon_path.replace(os.sep, '/') + "'," if has_icon else ""}
-          )
-          """
+          icon_line = f"icon='{icon_path}'," if has_icon else ""
 
-          with open('nswportios.spec', 'w') as f:
-              f.write(spec)
-          print("Spec file created")
+          spec = textwrap.dedent(f"""
+              # -*- mode: python ; coding: utf-8 -*-
+              a = Analysis(
+                  ['installer_windows.py'],
+                  pathex=[],
+                  binaries=[],
+                  datas=[{datas_str}],
+                  hiddenimports=['ctypes', 'pathlib', 'urllib.request', 'subprocess',
+                                 'shutil', 'tempfile', 'zipfile'],
+                  hookspath=[],
+                  hooksconfig={{}},
+                  runtime_hooks=[],
+                  excludes=[],
+                  noarchive=False,
+              )
+              pyz = PYZ(a.pure)
+              exe = EXE(
+                  pyz,
+                  a.scripts,
+                  a.binaries,
+                  a.datas,
+                  [],
+                  name='NSWPORTIOS_Setup',
+                  debug=False,
+                  bootloader_ignore_signals=False,
+                  strip=False,
+                  upx=True,
+                  console=True,
+                  {icon_line}
+              )
+          """).strip()
+
+          with open('nswportios.spec', 'w') as fh:
+              fh.write(spec)
+          print("=== nswportios.spec ===")
           print(open('nswportios.spec').read())
 
       - name: Build .exe from spec
-        run: pyinstaller nswportios.spec --noconfirm
+        run: pyinstaller nswportios.spec --noconfirm --clean
         shell: cmd
 
       - name: Verify .exe exists
