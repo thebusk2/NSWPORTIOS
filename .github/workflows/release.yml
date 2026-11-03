@@ -10,126 +10,84 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build Windows .exe installer ──────────────────────────────────────────
+  # ── Package Windows installer (.bat inside .zip) ───────────────────────────
   build-windows:
-    name: Build Windows Installer (.exe)
-    runs-on: windows-latest
+    name: Build Windows Package
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-
-      - name: Create PyInstaller spec file
-        shell: python
+      - name: Build Windows ZIP package
         run: |
-          import os, textwrap
+          mkdir -p win_pkg
+          # Core scripts
+          cp install_windows.bat win_pkg/
+          cp switch2ipa.py       win_pkg/
+          cp switch2ipa_gui.py   win_pkg/
+          cp README.md           win_pkg/
+          cp LICENSE             win_pkg/
+          # Optional: installer_windows.py for advanced users
+          cp installer_windows.py win_pkg/ 2>/dev/null || true
+          # Create a readme specific to Windows
+          cat > win_pkg/LEEME_PRIMERO.txt << 'EOF'
+          ╔══════════════════════════════════════════════════════╗
+          ║       NSWPORTIOS v1.0.0 - Instalador Windows         ║
+          ╚══════════════════════════════════════════════════════╝
 
-          icon_path = os.path.join('src_gui', 'icon.ico').replace('\\', '/')
-          has_icon  = os.path.isfile('src_gui/icon.ico')
+          INSTRUCCIONES DE INSTALACION:
+          ──────────────────────────────
+          1. Extrae todos estos archivos a una carpeta
+          2. Haz doble clic en: install_windows.bat
+          3. Sigue las instrucciones en pantalla
 
-          datas = []
-          for f in ['switch2ipa.py', 'switch2ipa_gui.py', 'README.md', 'LICENSE']:
-              if os.path.isfile(f):
-                  datas.append(f"('{f}', '.')")
-          datas_str = ', '.join(datas)
+          REQUISITOS PREVIOS:
+          ─────────────────────
+          • Python 3.10+ (https://www.python.org/downloads/)
+            → Marca "Add Python to PATH" al instalar
+          • Git (https://git-scm.com/download/win)
+            → El instalador intentara instalarlo automaticamente
 
-          icon_line = f"icon='{icon_path}'," if has_icon else ""
+          CONTACTO:
+          ──────────
+          GitHub:    https://github.com/thebusk2
+          Instagram: https://instagram.com/thebusk2
+          X:         https://x.com/thebusk2
+          EOF
 
-          spec = textwrap.dedent(f"""
-              # -*- mode: python ; coding: utf-8 -*-
-              a = Analysis(
-                  ['installer_windows.py'],
-                  pathex=[],
-                  binaries=[],
-                  datas=[{datas_str}],
-                  hiddenimports=['ctypes', 'pathlib', 'urllib.request', 'subprocess',
-                                 'shutil', 'tempfile', 'zipfile'],
-                  hookspath=[],
-                  hooksconfig={{}},
-                  runtime_hooks=[],
-                  excludes=[],
-                  noarchive=False,
-              )
-              pyz = PYZ(a.pure)
-              exe = EXE(
-                  pyz,
-                  a.scripts,
-                  a.binaries,
-                  a.datas,
-                  [],
-                  name='NSWPORTIOS_Setup',
-                  debug=False,
-                  bootloader_ignore_signals=False,
-                  strip=False,
-                  upx=True,
-                  console=True,
-                  {icon_line}
-              )
-          """).strip()
-
-          with open('nswportios.spec', 'w') as fh:
-              fh.write(spec)
-          print("=== nswportios.spec ===")
-          print(open('nswportios.spec').read())
-
-      - name: Build .exe from spec
-        run: pyinstaller nswportios.spec --noconfirm --clean
-        shell: cmd
-
-      - name: Verify .exe exists
-        run: |
-          if (Test-Path "dist/NSWPORTIOS_Setup.exe") {
-            $size = (Get-Item "dist/NSWPORTIOS_Setup.exe").Length / 1MB
-            Write-Host "NSWPORTIOS_Setup.exe built successfully ($([math]::Round($size, 1)) MB)"
-          } else {
-            Write-Host "ERROR: .exe not found"
-            exit 1
-          }
-        shell: pwsh
+          cd win_pkg && zip -r ../NSWPORTIOS_Windows.zip . && cd ..
+          ls -lh NSWPORTIOS_Windows.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: dist/NSWPORTIOS_Setup.exe
+          name: windows-package
+          path: NSWPORTIOS_Windows.zip
 
-  # ── Build macOS package ───────────────────────────────────────────────────
+  # ── Package macOS DMG ──────────────────────────────────────────────────────
   build-macos:
     name: Build macOS Package
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Package macOS files
+      - name: Use pre-built DMG from repo
         run: |
-          # In CI we don't have the built .app, so package the scripts
-          # The pre-built DMG from the repo is used if available
           if [ -f NSWPORTIOS_macOS.dmg ]; then
             echo "Using pre-built DMG from repository"
+            ls -lh NSWPORTIOS_macOS.dmg
           else
-            echo "Creating macOS zip package..."
-            zip -r NSWPORTIOS_macOS.zip \
+            echo "DMG not found, creating zip fallback..."
+            zip -r NSWPORTIOS_macOS.dmg \
               switch2ipa.py switch2ipa_gui.py setup.sh \
-              Install_Mac.command create_dmg.sh \
-              README.md LICENSE installer_windows.py
-            # Rename to .dmg extension for consistency in release
-            # (actual DMG requires local Xcode build)
-            mv NSWPORTIOS_macOS.zip NSWPORTIOS_macOS.dmg
+              Install_Mac.command README.md LICENSE
           fi
-          ls -lh NSWPORTIOS_macOS.dmg
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installer
+          name: macos-package
           path: NSWPORTIOS_macOS.dmg
 
   # ── Create GitHub Release ─────────────────────────────────────────────────
@@ -144,13 +102,13 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: windows-installer
+          name: windows-package
           path: ./release-assets/
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: macos-installer
+          name: macos-package
           path: ./release-assets/
 
       - name: List release assets
@@ -169,33 +127,33 @@ jobs:
 
             | Plataforma | Archivo | Descripción |
             |------------|---------|-------------|
-            | 🪟 Windows | `NSWPORTIOS_Setup.exe` | Instalador ejecutable completo |
-            | 🍎 macOS | `NSWPORTIOS_macOS.dmg` | Imagen de disco / paquete con la aplicación |
+            | 🪟 Windows | `NSWPORTIOS_Windows.zip` | Extrae y ejecuta `install_windows.bat` |
+            | 🍎 macOS   | `NSWPORTIOS_macOS.dmg`  | Imagen de disco con la aplicación |
 
-            ### ✨ Características
-            - Convierte juegos NSP/XCI/NSZ/XCZ a IPA nativa para iOS
-            - Interfaz visual con temática Nintendo Switch (Joy-Con azul/rojo)
-            - Soporte de idiomas: Español, English, Français, 日本語, Русский
-            - Soporte para mandos (GameController framework)
-            - Pipeline completo: extracción → reescritura → shaders → xcodebuild → IPA
+            ### 🪟 Instrucciones Windows
+            1. Descarga y extrae **`NSWPORTIOS_Windows.zip`**
+            2. Doble clic en **`install_windows.bat`**
+            3. Sigue las instrucciones (instala Python y Git si no los tienes)
+
+            > ⚠️ **¿Por qué ZIP y no .exe?**
+            > Los antivirus de Windows (incluido Defender) eliminan automáticamente los archivos `.exe` compilados con PyInstaller aunque sean seguros. El instalador `.bat` funciona igual de bien sin ese problema.
+
+            ### 🍎 Instrucciones macOS
+            1. Descarga y abre **`NSWPORTIOS_macOS.dmg`**
+            2. Arrastra `NSWPORTIOS.app` a `/Applications`
+            3. Abre la app y sigue las instrucciones
 
             ### 🛠️ Requisitos
-            - **macOS**: Xcode 15+, Python 3.12+, 15 GB espacio libre
-            - **Windows**: Python 3.10+, Git, .NET SDK (instalados automáticamente por el .exe)
+            - **macOS**: Xcode 15+, Python 3.12+, 15 GB libres
+            - **Windows**: Python 3.10+ (con PATH), Git
             - **Ambos**: Archivo `prod.keys` del dispositivo Switch
-
-            ### 📖 Instrucciones
-            1. Ejecuta el instalador para tu plataforma
-            2. Coloca tu `prod.keys` en la carpeta `keys/`
-            3. Coloca el juego (.nsp/.xci) en la carpeta `input/`
-            4. Abre NSWPORTIOS y haz click en **Compilar**
 
             ---
             *Desarrollado por [thebusk2](https://github.com/thebusk2)*
           draft: false
           prerelease: false
           files: |
-            release-assets/NSWPORTIOS_Setup.exe
+            release-assets/NSWPORTIOS_Windows.zip
             release-assets/NSWPORTIOS_macOS.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
