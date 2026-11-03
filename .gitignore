@@ -1,0 +1,54 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Motor upstream (se clona automáticamente con setup.sh)
+core/
+
+# Claves privadas y de consola (NUNCA SUBIR)
+*.keys
+keys/
+prod.keys
+title.keys
+
+# Archivos de juegos y volcados
+*.nsp
+*.xci
+*.nsz
+*.xcz
+*.nca
+input/*
+!input/.gitkeep
+
+# Paquetes compilados e intermedios
+output/*
+!output/.gitkeep
+temp_build/
+*.ipa
+*.app/Contents/MacOS/*
+*.o
+*.a
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+tools/venv/
+.venv/
+env/
+
+# Xcode / Apple
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+build/
+DerivedData/
+
+# Logs y temporales
+*.log
+logs/
+
