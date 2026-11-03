@@ -485,8 +485,13 @@ class NSWPortIOSGUI(tk.Tk):
         
     def _run_process(self):
         script = self.base_dir / "switch2ipa.py"
+        
+        # Usar Python del venv si existe
+        venv_py = Path.home() / ".nswportios_venv" / "bin" / "python3"
+        py_exec = str(venv_py) if venv_py.exists() else sys.executable
+        
         cmd = [
-            sys.executable, str(script),
+            py_exec, str(script),
             "-i", self.var_game_path.get(),
             "-k", self.var_keys_path.get(),
             "-l", self.var_game_lang.get(),
@@ -497,8 +502,14 @@ class NSWPortIOSGUI(tk.Tk):
         else: cmd.append("--no-fps")
         
         env = os.environ.copy()
-        extra_paths = ["/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".dotnet")]
+        extra_paths = [
+            str(Path.home() / ".local" / "bin"),
+            str(Path.home() / ".dotnet"),
+            "/opt/homebrew/bin",
+            "/usr/local/bin"
+        ]
         env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
+        env["DOTNET_ROOT"] = str(Path.home() / ".dotnet")
         
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         self.process = proc

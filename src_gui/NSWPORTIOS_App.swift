@@ -333,6 +333,7 @@ class AppState: ObservableObject {
         var env = ProcessInfo.processInfo.environment
         let extraPaths = [NSHomeDirectory() + "/.local/bin", NSHomeDirectory() + "/.dotnet", "/opt/homebrew/bin", "/usr/local/bin"]
         env["PATH"] = extraPaths.joined(separator: ":") + ":" + (env["PATH"] ?? "")
+        env["DOTNET_ROOT"] = NSHomeDirectory() + "/.dotnet"
         proc.environment = env
         
         let pipe = Pipe()
@@ -346,14 +347,24 @@ class AppState: ObservableObject {
             if !data.isEmpty, let str = String(data: data, encoding: .utf8) {
                 DispatchQueue.main.async {
                     self?.logs += str
-                    if str.contains("Rebuilding") || str.contains("patch_nso") {
+                    if str.contains("build ID lookup") || str.contains("survey") {
+                        self?.progressMessage = "Analizando juego y generando perfil..."
+                    } else if str.contains("extract") || str.contains("Extracting") {
+                        self?.progressMessage = "Extrayendo contenido del juego..."
+                    } else if str.contains("rewrite") || str.contains("patch_nso") || str.contains("Rebuilding") {
                         self?.progressMessage = "Reescribiendo binarios ARM64 (x18 & SVC)..."
-                    } else if str.contains("translating shaders") || str.contains("Metal") {
+                    } else if str.contains("heap_check") || str.contains("region_check") {
+                        self?.progressMessage = "Verificando memoria y regiones..."
+                    } else if str.contains("shader_split") || str.contains("shader split") {
+                        self?.progressMessage = "Dividiendo y analizando shaders..."
+                    } else if str.contains("translating shaders") || str.contains("Metal") || str.contains("build_shaders") {
                         self?.progressMessage = "Transpilando shaders Maxwell a Metal 3.0..."
-                    } else if str.contains("xcodebuild") || str.contains("Compiling") {
+                    } else if str.contains("xcodebuild") || str.contains("Compiling") || str.contains("build_ipa") {
                         self?.progressMessage = "Compilando Host HLE para iOS..."
-                    } else if str.contains("Packing") || str.contains("IPA") {
+                    } else if str.contains("Packing") || str.contains("IPA") || str.contains("pack_ipa") {
                         self?.progressMessage = "Empaquetando archivo .IPA..."
+                    } else if str.contains("[RED]") || str.contains("ERROR") {
+                        self?.progressMessage = "⚠️ Problema detectado..."
                     }
                 }
             }

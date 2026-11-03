@@ -134,6 +134,60 @@ def is_icloud_dataless(path):
     except Exception:
         return False
 
+def prepare_local_game_dir(files, temp_base):
+    """Crea un directorio temporal con symlinks SOLO a archivos descargados (no dataless).
+    Retorna la ruta del directorio o None si no hay archivos válidos."""
+    import tempfile
+    local_dir = Path(temp_base) / "game_input"
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    # Limpiar symlinks anteriores
+    for existing in local_dir.iterdir():
+        if existing.is_symlink():
+            existing.unlink()
+
+    valid = 0
+    skipped = []
+    for f in files:
+        if is_icloud_dataless(f):
+            skipped.append(f.name)
+        else:
+            link = local_dir / f.name
+            if not link.exists():
+                link.symlink_to(f.resolve())
+            valid += 1
+
+    if skipped:
+        print(f"{Colors.YELLOW}[AVISO] {len(skipped)} archivo(s) en iCloud (no descargados) fueron omitidos:{Colors.END}")
+        for s in skipped:
+            print(f"   ☁️  {s}")
+        if valid > 0:
+            print(f"{Colors.GREEN}✓ {valid} archivo(s) locales listos para compilar.{Colors.END}")
+
+    return local_dir if valid > 0 else None
+
+def check_python_deps(py_exec):
+    """Verifica que todas las dependencias de Python estén instaladas."""
+    check_code = """
+import sys
+missing = []
+try: import lz4.block
+except ImportError: missing.append('lz4')
+try: import capstone; assert capstone.__version__.startswith('5.')
+except: missing.append('"capstone>=5,<6"')
+try: import fontTools
+except ImportError: missing.append('fonttools')
+try: import backports.zstd
+except ImportError: missing.append('backports.zstd')
+if missing:
+    print(','.join(missing))
+    sys.exit(1)
+"""
+    res = subprocess.run([py_exec, "-c", check_code], capture_output=True, text=True)
+    if res.returncode != 0:
+        return res.stdout.strip().split(',')
+    return []
+
 def extract_title_id(filename):
     """Extrae el Title ID base de un archivo de juego."""
     m = re.search(r'\[([0-9A-Fa-f]{16})\]', filename)
@@ -198,9 +252,8 @@ def main():
     if args.input:
         in_path = Path(args.input).resolve()
         if in_path.is_file():
-            # Si es un archivo individual, extraer su title id y usar su carpeta
+            # Si es un archivo individual, extraer su title id
             target_title_id = extract_title_id(in_path.name)
-            target_dir = in_path.parent
             print(f"{Colors.GREEN}✓ Archivo seleccionado:{Colors.END} {in_path.name}")
             if target_title_id:
                 print(f"{Colors.GREEN}✓ Title ID identificado:{Colors.END} {target_title_id}")
@@ -209,8 +262,41 @@ def main():
                 print(f"{Colors.CYAN}Iniciando descarga desde iCloud... (por favor espera a que termine de descargarse en Finder antes de compilar){Colors.END}")
                 subprocess.run(["brctl", "download", str(in_path)])
                 return 1
+            # Crear directorio temporal con solo este archivo (evita leer archivos iCloud vecinos)
+            temp_game_dir = Path.home() / ".nswportios_build" / "game_input"
+            temp_game_dir.mkdir(parents=True, exist_ok=True)
+            for old_link in temp_game_dir.iterdir():
+                if old_link.is_symlink():
+                    old_link.unlink()
+            (temp_game_dir / in_path.name).symlink_to(in_path)
+            # Si hay archivos de updates/DLC con el mismo base title ID en la misma carpeta, incluirlos
+            if target_title_id:
+                parent = in_path.parent
+                for sibling in parent.iterdir():
+                    if sibling == in_path or sibling.name.startswith("._"):
+                        continue
+                    sibling_tid = extract_title_id(sibling.name)
+                    if sibling_tid and not is_icloud_dataless(sibling):
+                        # Incluir updates (0x800) y DLCs del mismo base title
+                        tid_raw = int(re.search(r'\[([0-9A-Fa-f]{16})\]', sibling.name).group(1), 16)
+                        base_raw = int(target_title_id, 16)
+                        if (tid_raw & ~0xFFF) == base_raw or (tid_raw & ~0xFFF) == (base_raw & ~0xFFF):
+                            link = temp_game_dir / sibling.name
+                            if not link.exists():
+                                link.symlink_to(sibling.resolve())
+                                print(f"{Colors.GREEN}  + Update/DLC incluido:{Colors.END} {sibling.name}")
+            target_dir = temp_game_dir
         elif in_path.is_dir():
-            target_dir = in_path
+            # Si es un directorio, filtrar archivos dataless
+            supported_exts = {'.nsp', '.xci', '.nsz', '.xcz'}
+            all_games = [f for f in in_path.iterdir()
+                         if f.suffix.lower() in supported_exts and not f.name.startswith("._")]
+            local_dir = prepare_local_game_dir(all_games, Path.home() / ".nswportios_build")
+            if local_dir is None:
+                print(f"{Colors.RED}[ERROR] No hay archivos de juego descargados localmente en la carpeta.{Colors.END}")
+                print(f"{Colors.YELLOW}Descarga primero el juego de iCloud Drive (clic derecho → Descargar ahora).{Colors.END}")
+                return 1
+            target_dir = local_dir
         else:
             print(f"{Colors.RED}[ERROR] La ruta especificada en --input no existe: {args.input}{Colors.END}")
             return 1
@@ -267,6 +353,19 @@ def main():
     # 4. Preparar entorno Python
     py_exec = ensure_python_environment(base_dir)
 
+    # 4.1 Verificar dependencias Python
+    missing_deps = check_python_deps(py_exec)
+    if missing_deps:
+        print(f"{Colors.YELLOW}[AVISO] Instalando dependencias faltantes: {', '.join(missing_deps)}{Colors.END}")
+        subprocess.run([py_exec, "-m", "pip", "install", "--quiet"] + missing_deps)
+        # Verificar de nuevo
+        still_missing = check_python_deps(py_exec)
+        if still_missing:
+            print(f"{Colors.RED}[ERROR] No se pudieron instalar: {', '.join(still_missing)}{Colors.END}")
+            print(f"{Colors.YELLOW}Ejecuta manualmente: {py_exec} -m pip install {' '.join(still_missing)}{Colors.END}")
+            return 1
+        print(f"{Colors.GREEN}✓ Dependencias instaladas correctamente.{Colors.END}")
+
     # 5. Construir comando
     cmd = [
         py_exec,
@@ -281,6 +380,10 @@ def main():
     if target_title_id:
         cmd.extend(["--title-id", target_title_id])
 
+    # Flags de tolerancia para maximizar compatibilidad
+    cmd.append("--allow-other-metal")
+    cmd.append("--allow-damaged")
+
     if args.fps:
         cmd.append("--show-fps")
     else:
@@ -289,6 +392,7 @@ def main():
     temp_work = Path.home() / ".nswportios_build"
     temp_work.mkdir(exist_ok=True)
     cmd.extend(["--work-dir", str(temp_work)])
+    cmd.extend(["--progress", "lines"])
 
     print(f"\n{Colors.BLUE}{Colors.BOLD}--- Iniciando Pipeline de Compilación a iOS ---{Colors.END}")
     print(f"• Motor: {Colors.CYAN}nxnative (NSO Rewriter + Horizon HLE + Metal 3){Colors.END}")
@@ -296,7 +400,30 @@ def main():
     print(f"• Idioma: {Colors.CYAN}{args.lang}{Colors.END}")
     print(f"• Plataforma: {Colors.CYAN}{args.platform}{Colors.END}")
     print(f"• RomFS: {Colors.CYAN}{args.romfs}{Colors.END}")
-    print(f"• FPS en pantalla: {Colors.CYAN}{'Sí' if args.fps else 'No'}{Colors.END}\n")
+    print(f"• FPS en pantalla: {Colors.CYAN}{'Sí' if args.fps else 'No'}{Colors.END}")
+
+    # 6.1 Verificar Metal Toolchain antes de compilar
+    metal_check = subprocess.run(
+        ["xcrun", "-sdk", "iphoneos", "metal", "--version"],
+        capture_output=True, text=True
+    )
+    if metal_check.returncode != 0:
+        print(f"\n{Colors.YELLOW}[AVISO] Metal Toolchain no instalado. Es necesario para compilar shaders de iOS.{Colors.END}")
+        print(f"{Colors.CYAN}Instalando Metal Toolchain (puede tardar unos minutos)...{Colors.END}")
+        install_res = subprocess.run(
+            ["xcodebuild", "-downloadComponent", "MetalToolchain"],
+            capture_output=True, text=True
+        )
+        if install_res.returncode != 0:
+            print(f"{Colors.RED}[ERROR] No se pudo instalar el Metal Toolchain.{Colors.END}")
+            print(f"{Colors.YELLOW}Instálalo manualmente: xcodebuild -downloadComponent MetalToolchain{Colors.END}")
+            return 1
+        print(f"{Colors.GREEN}✓ Metal Toolchain instalado correctamente.{Colors.END}")
+    else:
+        metal_ver = metal_check.stdout.strip().split('\n')[0] if metal_check.stdout else "OK"
+        print(f"• Metal: {Colors.CYAN}{metal_ver}{Colors.END}")
+
+    print()  # Línea en blanco antes del pipeline
 
     try:
         env = os.environ.copy()
