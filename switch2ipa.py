@@ -44,21 +44,21 @@ def find_prod_keys(base_dir, custom_keys_path=None):
     candidates = [
         base_dir / "keys" / "prod.keys",
         base_dir / "keys" / "keys.txt",
+        Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/Games Roms/NSP/Key y FW/prod.keys",
         Path.home() / ".switch" / "prod.keys",
         Path.home() / ".config" / "yuzu" / "keys" / "prod.keys",
         Path.home() / ".config" / "Ryujinx" / "system" / "prod.keys",
         Path.home() / "Library" / "Application Support" / "Ryujinx" / "system" / "prod.keys",
     ]
 
-    # También buscar cualquier archivo .keys dentro de keys/
     keys_dir = base_dir / "keys"
     if keys_dir.exists():
         for kf in keys_dir.glob("*.keys"):
-            if kf.is_file() and kf not in candidates:
+            if not kf.name.startswith("._") and kf.is_file() and kf not in candidates:
                 candidates.insert(0, kf)
 
     for cand in candidates:
-        if cand.is_file() and cand.stat().st_size > 0:
+        if not cand.name.startswith("._") and cand.is_file() and cand.stat().st_size > 0:
             return cand.resolve()
 
     return None
@@ -71,7 +71,6 @@ def scan_games(input_dir):
         files.extend(list(input_dir.glob(f"*{ext}")))
         files.extend(list(input_dir.glob(f"*{ext.upper()}")))
 
-    # Filtrar archivos ocultos o de macOS AppleDouble (._*)
     valid_files = [f for f in files if not f.name.startswith('._') and f.stat().st_size > 0]
     return sorted(valid_files, key=lambda x: x.name.lower())
 
@@ -79,7 +78,6 @@ def group_games_by_title(files):
     """Agrupa juegos por título o title ID si hay base, updates y DLCs."""
     games = {}
     for f in files:
-        # Extraer title ID si existe en formato [0100XXXXXXXXXXXX]
         m = re.search(r'\[([0-9A-Fa-f]{16})\]', f.name)
         if m:
             tid_raw = int(m.group(1), 16)
@@ -92,7 +90,6 @@ def group_games_by_title(files):
                 base_tid = (tid_raw & ~0xFFF) - 0x1000
             key = f"{base_tid:016X}"
         else:
-            # Agrupar por nombre aproximado antes de corchetes
             clean_name = re.sub(r'\[.*?\]|\(.*?\)', '', f.stem).strip().lower()
             key = clean_name or f.stem
 
@@ -102,30 +99,65 @@ def group_games_by_title(files):
     return games
 
 def ensure_python_environment(base_dir):
-    """Comprueba si el venv con las herramientas está disponible, de lo contrario usa el Python actual."""
-    venv_py = base_dir / "tools" / "venv" / "bin" / "python3"
-    if venv_py.exists():
-        return str(venv_py)
+    """Localiza el ejecutable de Python 3.12 con las dependencias."""
+    candidates = [
+        Path.home() / ".nswportios_venv" / "bin" / "python3",
+        base_dir / "tools" / "venv" / "bin" / "python3",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+
+    # Si el python actual es >= 3.12
+    if sys.version_info >= (3, 12):
+        return sys.executable
+
     return sys.executable
 
-def check_system_dependencies():
-    """Valida herramientas de compilación esenciales."""
-    errors = []
-    if not shutil.which("xcodebuild"):
-        errors.append("xcodebuild (Instala Xcode desde la App Store o selecciona la ruta con xcode-select)")
-    return errors
+def find_engine_repo(base_dir):
+    """Localiza el repositorio del motor de compilación."""
+    candidates = [
+        Path.home() / ".nxnative",
+        base_dir / "core",
+        Path("/tmp/nxnative_core")
+    ]
+    for c in candidates:
+        if (c / "scripts" / "build_ipa_from_nsp.py").exists() and (c / "dm" / "games").exists():
+            return c
+    return base_dir / "core"
+
+def is_icloud_dataless(path):
+    """Comprueba si un archivo en iCloud está en la nube sin descargar (dataless)."""
+    try:
+        res = subprocess.run(["ls", "-lO", str(path)], capture_output=True, text=True)
+        return "dataless" in res.stdout
+    except Exception:
+        return False
+
+def extract_title_id(filename):
+    """Extrae el Title ID base de un archivo de juego."""
+    m = re.search(r'\[([0-9A-Fa-f]{16})\]', filename)
+    if m:
+        tid_raw = int(m.group(1), 16)
+        low = tid_raw & 0xFFF
+        if low == 0:
+            return f"{tid_raw:016X}"
+        elif low == 0x800:
+            return f"{(tid_raw & ~0xFFF):016X}"
+        else:
+            return f"{((tid_raw & ~0xFFF) - 0x1000):016X}"
+    return None
 
 def main():
     print_banner()
 
     base_dir = Path(__file__).resolve().parent
-    core_dir = base_dir / "core"
+    core_dir = find_engine_repo(base_dir)
     build_script = core_dir / "scripts" / "build_ipa_from_nsp.py"
     input_dir = base_dir / "input"
     keys_dir = base_dir / "keys"
     output_dir = base_dir / "output"
 
-    # Crear directorios base si no existen
     input_dir.mkdir(parents=True, exist_ok=True)
     keys_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -144,28 +176,8 @@ def main():
                         help="bundle = incluye assets en el .ipa (recomendado)\nseparate = extrae romfs para copiar por USB (juegos gigantes)")
     parser.add_argument("--platform", choices=["ios", "mac-app"], default="ios",
                         help="ios = compila un .ipa para iPhone/iPad\nmac-app = compila una app nativa para macOS")
-    parser.add_argument("--setup", action="store_true", help="Ejecuta la comprobación e instalación de dependencias del sistema")
 
     args = parser.parse_args()
-
-    # Si se pide setup
-    if args.setup:
-        setup_script = base_dir / "setup.sh"
-        if setup_script.exists():
-            subprocess.run(["bash", str(setup_script)])
-            return 0
-        else:
-            print(f"{Colors.RED}[ERROR] No se encontró setup.sh en {base_dir}{Colors.END}")
-            return 1
-
-    # Validar dependencias del sistema
-    sys_errors = check_system_dependencies()
-    if sys_errors:
-        print(f"{Colors.RED}[!] Faltan herramientas esenciales del sistema:{Colors.END}")
-        for err in sys_errors:
-            print(f"  • {err}")
-        print(f"\n{Colors.YELLOW}Ejecuta './setup.sh' para configurar el entorno automáticamente.{Colors.END}\n")
-        return 1
 
     # 1. Localizar prod.keys
     keys_file = find_prod_keys(base_dir, args.keys)
@@ -181,18 +193,28 @@ def main():
 
     # 2. Localizar Juegos
     target_dir = None
+    target_title_id = None
+
     if args.input:
         in_path = Path(args.input).resolve()
         if in_path.is_file():
-            # Crear una carpeta temporal o apuntar a la carpeta del archivo
+            # Si es un archivo individual, extraer su title id y usar su carpeta
+            target_title_id = extract_title_id(in_path.name)
             target_dir = in_path.parent
+            print(f"{Colors.GREEN}✓ Archivo seleccionado:{Colors.END} {in_path.name}")
+            if target_title_id:
+                print(f"{Colors.GREEN}✓ Title ID identificado:{Colors.END} {target_title_id}")
+            if is_icloud_dataless(in_path):
+                print(f"{Colors.YELLOW}{Colors.BOLD}[AVISO] El archivo está en iCloud Drive pero aún NO se ha descargado a tu Mac (icono de nubecita ☁️).{Colors.END}")
+                print(f"{Colors.CYAN}Iniciando descarga desde iCloud... (por favor espera a que termine de descargarse en Finder antes de compilar){Colors.END}")
+                subprocess.run(["brctl", "download", str(in_path)])
+                return 1
         elif in_path.is_dir():
             target_dir = in_path
         else:
             print(f"{Colors.RED}[ERROR] La ruta especificada en --input no existe: {args.input}{Colors.END}")
             return 1
     else:
-        # Escaneo en input/
         games_found = scan_games(input_dir)
         if not games_found:
             print(f"{Colors.RED}{Colors.BOLD}[!] No se encontraron juegos en la carpeta 'input/'.{Colors.END}")
@@ -205,7 +227,6 @@ def main():
 
         grouped = group_games_by_title(games_found)
         if len(grouped) == 1:
-            # Solo un juego detectado
             selected_key = list(grouped.keys())[0]
             game_files = grouped[selected_key]
             print(f"{Colors.GREEN}✓ Juego detectado:{Colors.END}")
@@ -213,6 +234,8 @@ def main():
                 size_mb = gf.stat().st_size / (1024 * 1024)
                 print(f"   • {gf.name} ({size_mb:.1f} MB)")
             target_dir = input_dir
+            if len(selected_key) == 16:
+                target_title_id = selected_key
         else:
             print(f"\n{Colors.YELLOW}Se detectaron múltiples juegos en 'input/':{Colors.END}")
             keys_list = list(grouped.keys())
@@ -226,8 +249,9 @@ def main():
                 selected_idx = int(choice) - 1
                 if 0 <= selected_idx < len(keys_list):
                     selected_key = keys_list[selected_idx]
-                    # Si están todos en input_dir, pasamos el title id del seleccionado
                     target_dir = input_dir
+                    if len(selected_key) == 16:
+                        target_title_id = selected_key
                 else:
                     print(f"{Colors.RED}Selección inválida.{Colors.END}")
                     return 1
@@ -254,18 +278,21 @@ def main():
         "--romfs", args.romfs,
     ]
 
+    if target_title_id:
+        cmd.extend(["--title-id", target_title_id])
+
     if args.fps:
         cmd.append("--show-fps")
     else:
-        cmd.append("--no-show-fps")
+        cmd.append("--no-fps")
 
-    # Carpeta temporal de trabajo
-    temp_work = base_dir / "temp_build"
+    temp_work = Path.home() / ".nswportios_build"
     temp_work.mkdir(exist_ok=True)
     cmd.extend(["--work-dir", str(temp_work)])
 
     print(f"\n{Colors.BLUE}{Colors.BOLD}--- Iniciando Pipeline de Compilación a iOS ---{Colors.END}")
     print(f"• Motor: {Colors.CYAN}nxnative (NSO Rewriter + Horizon HLE + Metal 3){Colors.END}")
+    print(f"• Python: {Colors.CYAN}{py_exec}{Colors.END}")
     print(f"• Idioma: {Colors.CYAN}{args.lang}{Colors.END}")
     print(f"• Plataforma: {Colors.CYAN}{args.platform}{Colors.END}")
     print(f"• RomFS: {Colors.CYAN}{args.romfs}{Colors.END}")
@@ -273,9 +300,14 @@ def main():
 
     try:
         env = os.environ.copy()
-        # Añadir dotnet y brew al PATH si existen
-        extra_paths = ["/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".dotnet")]
+        extra_paths = [
+            str(Path.home() / ".local" / "bin"),
+            str(Path.home() / ".dotnet"),
+            "/opt/homebrew/bin",
+            "/usr/local/bin"
+        ]
         env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
+        env["DOTNET_ROOT"] = str(Path.home() / ".dotnet")
 
         proc = subprocess.run(cmd, env=env)
         if proc.returncode != 0:
@@ -302,7 +334,7 @@ def main():
             print(f"3. Si tu herramienta de sideloading tiene la opción 'Increased Memory Limit', actívala.")
             print(f"4. ¡A jugar de forma nativa a 60 FPS con aceleración Metal!\n")
         else:
-            print(f"\n{Colors.YELLOW}El proceso terminó pero no se encontró un archivo .ipa generado en las rutas habituales.{Colors.END}")
+            print(f"\n{Colors.YELLOW}El proceso terminó pero no se encontró un archivo .ipa generado.{Colors.END}")
 
     except KeyboardInterrupt:
         print(f"\n{Colors.RED}Compilación interrumpida por el usuario.{Colors.END}")

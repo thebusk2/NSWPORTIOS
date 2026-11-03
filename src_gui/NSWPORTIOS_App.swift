@@ -208,7 +208,7 @@ class AppState: ObservableObject {
         
         let keysDir = baseDir.appendingPathComponent("keys")
         if let files = try? FileManager.default.contentsOfDirectory(atPath: keysDir.path) {
-            for f in files where f.hasSuffix(".keys") {
+            for f in files where f.hasSuffix(".keys") && !f.hasPrefix("._") {
                 self.keysPath = keysDir.appendingPathComponent(f).path
                 self.isKeysValid = true
                 return
@@ -321,12 +321,17 @@ class AppState: ObservableObject {
         if showFps { args.append("--fps") } else { args.append("--no-fps") }
         
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        let venvPy = NSHomeDirectory() + "/.nswportios_venv/bin/python3"
+        if FileManager.default.fileExists(atPath: venvPy) {
+            proc.executableURL = URL(fileURLWithPath: venvPy)
+        } else {
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        }
         proc.arguments = args
         proc.currentDirectoryURL = baseDir
         
         var env = ProcessInfo.processInfo.environment
-        let extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.dotnet"]
+        let extraPaths = [NSHomeDirectory() + "/.local/bin", NSHomeDirectory() + "/.dotnet", "/opt/homebrew/bin", "/usr/local/bin"]
         env["PATH"] = extraPaths.joined(separator: ":") + ":" + (env["PATH"] ?? "")
         proc.environment = env
         
