@@ -50,8 +50,11 @@ DOTNET_DIR = Path.home() / ".dotnet"
 def enable_ansi():
     """Enable ANSI escape sequences on Windows 10+."""
     if sys.platform == "win32":
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        try:
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        except Exception:
+            pass  # Not on Windows or missing windll
 
 
 def print_step(step: int, total: int, msg: str):
