@@ -24,8 +24,8 @@ Desarrollado y mantenido por **thebusk2**:
 ### 📥 Descargas Directas / Instaladores
 | Plataforma | Paquete Instalador | Descripción |
 | :--- | :--- | :--- |
-| 🍏 **macOS** | [**`NSWPORTIOS_macOS.dmg`**](releases/NSWPORTIOS_macOS.dmg) | Imagen de disco con `NSWPORTIOS.app` (arrastrar y soltar a `/Applications`) |
-| 🪟 **Windows** | [**`NSWPORTIOS_Windows.zip`**](releases/NSWPORTIOS_Windows.zip) | Paquete ZIP portable con scripts de instalación y acceso directo |
+| 🍏 **macOS** | [**`NSWPORTIOS_macOS.dmg`**](https://github.com/thebusk2/NSWPORTIOS/releases/latest/download/NSWPORTIOS_macOS.dmg) | Imagen de disco con `NSWPORTIOS.app` (arrastrar y soltar a `/Applications`) |
+| 🪟 **Windows** | [**`NSWPORTIOS_Setup.exe`**](https://github.com/thebusk2/NSWPORTIOS/releases/latest/download/NSWPORTIOS_Setup.exe) | Instalador ejecutable (.exe) — configura todo automáticamente |
 
 ---
 
@@ -82,11 +82,8 @@ flowchart LR
      ```
 
 ### En Windows:
-1. Asegúrate de tener instalado [Python 3.10+](https://www.python.org/downloads/) (con la casilla *"Add Python to PATH"* marcada).
-2. Haz doble clic en `install_windows.bat` o ejecuta en PowerShell:
-   ```powershell
-   .\install_windows.ps1
-   ```
+1. Descarga **`NSWPORTIOS_Setup.exe`** desde la [página de Releases](https://github.com/thebusk2/NSWPORTIOS/releases/latest).
+2. Ejecuta el instalador — configurará Python, Git, .NET SDK y todas las dependencias automáticamente.
 3. Se creará un acceso directo en tu Escritorio para abrir la interfaz gráfica.
 
 ---
