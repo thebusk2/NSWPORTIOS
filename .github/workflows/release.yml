@@ -10,46 +10,51 @@ permissions:
   contents: write
 
 jobs:
-  # ── Package Windows installer (.bat inside .zip) ───────────────────────────
+  # ── Construir paquete Windows (.zip con .bat) ─────────────────────────────
   build-windows:
     name: Build Windows Package
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Windows ZIP package
+      - name: Build Windows ZIP
         run: |
-          mkdir -p win_pkg
-          # Core scripts
+          set -e
+          mkdir -p win_pkg/src_gui
+
           cp install_windows.bat win_pkg/
           cp switch2ipa.py       win_pkg/
           cp switch2ipa_gui.py   win_pkg/
           cp README.md           win_pkg/
-          [ -f LICENSE ] && cp LICENSE win_pkg/ || true
-          # Icono Windows
-          [ -f src_gui/icon.ico ] && mkdir -p win_pkg/src_gui && cp src_gui/icon.ico win_pkg/src_gui/ || true
-          # Readme sin caracteres Unicode (compatible con Notepad)
-          cat > win_pkg/LEEME_PRIMERO.txt << 'EOF'
-NSWPORTIOS - Instalador Windows
-================================
 
-INSTRUCCIONES:
-1. Extrae TODOS estos archivos en una carpeta
-2. Haz doble clic en: install_windows.bat
-3. El instalador descargara e instalara Python si no lo tienes
-4. Sigue las instrucciones en pantalla
+          if [ -f LICENSE ]; then
+            cp LICENSE win_pkg/
+          fi
 
-NOTA: La compilacion de IPA requiere macOS con Xcode.
-      En Windows puedes preparar los archivos y explorar la herramienta.
+          if [ -f src_gui/icon.ico ]; then
+            cp src_gui/icon.ico win_pkg/src_gui/
+          fi
 
-CONTACTO:
-  GitHub:    https://github.com/thebusk2
-  Instagram: https://instagram.com/thebusk2
-  X:         https://x.com/thebusk2
-EOF
+          # Instrucciones en texto plano (sin Unicode para compatibilidad con Notepad)
+          printf 'NSWPORTIOS - Instalador Windows\n' > win_pkg/LEEME_PRIMERO.txt
+          printf '================================\n\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf 'INSTRUCCIONES:\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '1. Extrae TODOS estos archivos en una misma carpeta\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '2. Haz doble clic en: install_windows.bat\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '3. El instalador descargara e instalara Python si no lo tienes\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '4. Sigue las instrucciones en pantalla\n\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf 'NOTA: La compilacion real de IPA requiere macOS con Xcode.\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '      En Windows puedes preparar archivos y explorar la herramienta.\n\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf 'CONTACTO:\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '  GitHub:    https://github.com/thebusk2\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '  Instagram: https://instagram.com/thebusk2\n' >> win_pkg/LEEME_PRIMERO.txt
+          printf '  X:         https://x.com/thebusk2\n' >> win_pkg/LEEME_PRIMERO.txt
 
-          cd win_pkg && zip -r ../NSWPORTIOS_Windows.zip . && cd ..
+          cd win_pkg
+          zip -r ../NSWPORTIOS_Windows.zip .
+          cd ..
+          echo "ZIP creado:"
           ls -lh NSWPORTIOS_Windows.zip
 
       - name: Upload Windows artifact
@@ -58,25 +63,29 @@ EOF
           name: windows-package
           path: NSWPORTIOS_Windows.zip
 
-  # ── Package macOS DMG ──────────────────────────────────────────────────────
+  # ── Paquete macOS (DMG pre-construido en el repo) ─────────────────────────
   build-macos:
     name: Build macOS Package
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Use pre-built DMG from repo
+      - name: Prepare macOS package
         run: |
-          if [ -f NSWPORTIOS_macOS.dmg ]; then
-            echo "Using pre-built DMG from repository"
-            ls -lh NSWPORTIOS_macOS.dmg
+          set -e
+          if [ -f releases/NSWPORTIOS_macOS.dmg ]; then
+            cp releases/NSWPORTIOS_macOS.dmg NSWPORTIOS_macOS.dmg
+            echo "DMG copiado desde releases/"
+          elif [ -f NSWPORTIOS_macOS.dmg ]; then
+            echo "Usando DMG de la raiz del repo"
           else
-            echo "DMG not found, creating zip fallback..."
+            echo "DMG no encontrado, creando ZIP de respaldo..."
             zip -r NSWPORTIOS_macOS.dmg \
               switch2ipa.py switch2ipa_gui.py setup.sh \
-              Install_Mac.command README.md LICENSE
+              Install_Mac.command README.md || true
           fi
+          ls -lh NSWPORTIOS_macOS.dmg
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -84,13 +93,13 @@ EOF
           name: macos-package
           path: NSWPORTIOS_macOS.dmg
 
-  # ── Create GitHub Release ─────────────────────────────────────────────────
+  # ── Publicar GitHub Release ───────────────────────────────────────────────
   release:
     name: Publish Release
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download Windows artifact
@@ -113,37 +122,42 @@ EOF
         with:
           name: "NSWPORTIOS ${{ github.ref_name }}"
           body: |
-            ## 🎮 NSWPORTIOS ${{ github.ref_name }}
+            ## NSWPORTIOS ${{ github.ref_name }}
 
-            **Nintendo Switch → iOS Porter Toolchain Suite**
+            **Nintendo Switch to iOS Porter - by thebusk2**
 
-            ### 📥 Descargas
+            ### Descargas
 
-            | Plataforma | Archivo | Descripción |
-            |------------|---------|-------------|
-            | 🪟 Windows | `NSWPORTIOS_Windows.zip` | Extrae y ejecuta `install_windows.bat` |
-            | 🍎 macOS   | `NSWPORTIOS_macOS.dmg`  | Imagen de disco con la aplicación |
+            | Plataforma | Archivo | Instrucciones |
+            |------------|---------|---------------|
+            | Windows    | `NSWPORTIOS_Windows.zip` | Extrae todo y ejecuta `install_windows.bat` |
+            | macOS      | `NSWPORTIOS_macOS.dmg`  | Abre el DMG y arrastra la app a /Applications |
 
-            ### 🪟 Instrucciones Windows
-            1. Descarga y extrae **`NSWPORTIOS_Windows.zip`**
-            2. Doble clic en **`install_windows.bat`**
-            3. Sigue las instrucciones (instala Python y Git si no los tienes)
+            ### Instrucciones Windows
+            1. Descarga y extrae `NSWPORTIOS_Windows.zip`
+            2. Doble clic en `install_windows.bat`
+            3. El instalador instala Python automaticamente si no lo tienes
+            4. Sigue las instrucciones en pantalla
 
-            > ⚠️ **¿Por qué ZIP y no .exe?**
-            > Los antivirus de Windows (incluido Defender) eliminan automáticamente los archivos `.exe` compilados con PyInstaller aunque sean seguros. El instalador `.bat` funciona igual de bien sin ese problema.
-
-            ### 🍎 Instrucciones macOS
-            1. Descarga y abre **`NSWPORTIOS_macOS.dmg`**
+            ### Instrucciones macOS
+            1. Descarga y abre `NSWPORTIOS_macOS.dmg`
             2. Arrastra `NSWPORTIOS.app` a `/Applications`
             3. Abre la app y sigue las instrucciones
 
-            ### 🛠️ Requisitos
+            ### Requisitos
             - **macOS**: Xcode 15+, Python 3.12+, 15 GB libres
-            - **Windows**: Python 3.10+ (con PATH), Git
-            - **Ambos**: Archivo `prod.keys` del dispositivo Switch
+            - **Windows**: El instalador descarga todo automaticamente
+            - **Ambos**: Archivo `prod.keys` de tu Nintendo Switch
+
+            ### Herramientas para instalar IPA en iPhone/iPad
+            - TrollStore: https://github.com/opa334/TrollStore
+            - AltStore: https://altstore.io/
+            - SideStore: https://sidestore.io/
+            - Sideloadly: https://sideloadly.io/
 
             ---
-            *Desarrollado por [thebusk2](https://github.com/thebusk2)*
+            Desarrollado por thebusk2
+            GitHub: https://github.com/thebusk2
           draft: false
           prerelease: false
           files: |
