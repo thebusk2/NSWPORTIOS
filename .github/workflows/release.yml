@@ -26,34 +26,28 @@ jobs:
           cp switch2ipa.py       win_pkg/
           cp switch2ipa_gui.py   win_pkg/
           cp README.md           win_pkg/
-          cp LICENSE             win_pkg/
-          # Optional: installer_windows.py for advanced users
-          cp installer_windows.py win_pkg/ 2>/dev/null || true
-          # Create a readme specific to Windows
+          [ -f LICENSE ] && cp LICENSE win_pkg/ || true
+          # Icono Windows
+          [ -f src_gui/icon.ico ] && mkdir -p win_pkg/src_gui && cp src_gui/icon.ico win_pkg/src_gui/ || true
+          # Readme sin caracteres Unicode (compatible con Notepad)
           cat > win_pkg/LEEME_PRIMERO.txt << 'EOF'
-          ╔══════════════════════════════════════════════════════╗
-          ║       NSWPORTIOS v1.0.0 - Instalador Windows         ║
-          ╚══════════════════════════════════════════════════════╝
+NSWPORTIOS - Instalador Windows
+================================
 
-          INSTRUCCIONES DE INSTALACION:
-          ──────────────────────────────
-          1. Extrae todos estos archivos a una carpeta
-          2. Haz doble clic en: install_windows.bat
-          3. Sigue las instrucciones en pantalla
+INSTRUCCIONES:
+1. Extrae TODOS estos archivos en una carpeta
+2. Haz doble clic en: install_windows.bat
+3. El instalador descargara e instalara Python si no lo tienes
+4. Sigue las instrucciones en pantalla
 
-          REQUISITOS PREVIOS:
-          ─────────────────────
-          • Python 3.10+ (https://www.python.org/downloads/)
-            → Marca "Add Python to PATH" al instalar
-          • Git (https://git-scm.com/download/win)
-            → El instalador intentara instalarlo automaticamente
+NOTA: La compilacion de IPA requiere macOS con Xcode.
+      En Windows puedes preparar los archivos y explorar la herramienta.
 
-          CONTACTO:
-          ──────────
-          GitHub:    https://github.com/thebusk2
-          Instagram: https://instagram.com/thebusk2
-          X:         https://x.com/thebusk2
-          EOF
+CONTACTO:
+  GitHub:    https://github.com/thebusk2
+  Instagram: https://instagram.com/thebusk2
+  X:         https://x.com/thebusk2
+EOF
 
           cd win_pkg && zip -r ../NSWPORTIOS_Windows.zip . && cd ..
           ls -lh NSWPORTIOS_Windows.zip
