@@ -21,6 +21,14 @@ Desarrollado y mantenido por **thebusk2**:
 
 ---
 
+### 📥 Descargas Directas / Instaladores
+| Plataforma | Paquete Instalador | Descripción |
+| :--- | :--- | :--- |
+| 🍏 **macOS** | [**`NSWPORTIOS_macOS.dmg`**](releases/NSWPORTIOS_macOS.dmg) | Imagen de disco con `NSWPORTIOS.app` (arrastrar y soltar a `/Applications`) |
+| 🪟 **Windows** | [**`NSWPORTIOS_Windows.zip`**](releases/NSWPORTIOS_Windows.zip) | Paquete ZIP portable con scripts de instalación y acceso directo |
+
+---
+
 </div>
 
 ## 🌟 Características Principales

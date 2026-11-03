@@ -1,0 +1,32 @@
+name: Release NSWPORTIOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Release Packages
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NSWPORTIOS Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            NSWPORTIOS_macOS.dmg
+            NSWPORTIOS_Windows.zip
+            releases/NSWPORTIOS_macOS.dmg
+            releases/NSWPORTIOS_Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
