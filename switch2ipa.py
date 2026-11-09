@@ -63,15 +63,101 @@ def find_prod_keys(base_dir, custom_keys_path=None):
 
     return None
 
+def detect_switch_generation(path):
+    """
+    Detecta si un juego es de Switch 1 o Switch 2.
+    Retorna: ("switch1", <motivo>) o ("switch2", <motivo>)
+    path puede ser un archivo (.nsp/.xci/.nup) o un directorio extraído.
+    """
+    p = Path(path)
+
+    # Archivo .nup → siempre Switch 2
+    if p.is_file() and p.suffix.lower() == '.nup':
+        return ("switch2", "archivo .nup (formato Switch 2)")
+
+    # Carpeta extraída: detectar por game.tsv o exefs/
+    if p.is_dir():
+        game_tsv = p / "game.tsv"
+        exefs = p / "exefs"
+        if game_tsv.exists():
+            # Leer game.tsv para buscar indicadores NVN2 / Ounce
+            try:
+                content = game_tsv.read_text(errors='ignore')
+                if any(kw in content for kw in ['nvn2', 'NVN2', 'ounce', 'Ounce', 'ampere', 'Ampere']):
+                    return ("switch2", "game.tsv contiene marcadores NVN2/Ounce")
+            except Exception:
+                pass
+        # Si exefs existe y contiene .nso con sdk "Ounce" (heurística por tamaño)
+        if exefs.exists() and exefs.is_dir():
+            nsos = list(exefs.glob("*.nso")) + list(exefs.glob("main"))
+            if nsos:
+                # NSOs de Switch 2 suelen ser más grandes (SDK Ounce)
+                # Heurística: main NSO > 8MB sugiere Switch 2
+                for nso in nsos:
+                    if nso.stat().st_size > 8 * 1024 * 1024:
+                        return ("switch2", f"NSO grande ({nso.stat().st_size // (1024*1024)}MB) → posible SDK Ounce")
+        # Carpeta con estructura típica Switch 2 (TitleID de 16 hex)
+        if re.match(r'^[0-9A-Fa-f]{16}$', p.name):
+            if (p / "romfs").exists() and (p / "exefs").exists():
+                return ("switch2", "carpeta TitleID con romfs/exefs (formato Switch 2)")
+        return ("switch1", "carpeta extraída Switch 1 (romfs/exefs)")
+
+    # Para archivos NSP/XCI: intentar detectar por nombre/metadatos
+    # Switch 2 TitleIDs suelen empezar por 040x (heurística general, NO definitiva)
+    m = re.search(r'\[([0-9A-Fa-f]{16})\]', p.name)
+    if m:
+        tid = m.group(1).upper()
+        # TitleIDs de Switch 2 conocidos empiezan con 0400 (igual que Switch 1)
+        # No hay forma segura de distinguir solo por TitleID sin leer el contenido
+        pass
+
+    return ("switch1", f"archivo {p.suffix} estándar Switch 1")
+
+
+def scan_switch2_games(input_dir):
+    """
+    Escanea el directorio input en busca de juegos Switch 2:
+    - Archivos .nup
+    - Carpetas con estructura romfs/ + exefs/ (TitleID de 16 hex)
+    Retorna lista de Path (archivos o directorios).
+    """
+    results = []
+
+    # Archivos .nup
+    for f in input_dir.glob("*.nup"):
+        if not f.name.startswith('._') and f.stat().st_size > 0:
+            results.append(f)
+
+    # Carpetas extraídas: buscar estructura TitleID/romfs + exefs
+    for d in input_dir.iterdir():
+        if d.is_dir() and not d.name.startswith('.'):
+            has_romfs = (d / "romfs").exists()
+            has_exefs = (d / "exefs").exists()
+            is_titleid = bool(re.match(r'^[0-9A-Fa-f]{16}$', d.name))
+            if has_romfs and has_exefs:
+                results.append(d)
+            elif is_titleid and (has_romfs or has_exefs):
+                results.append(d)
+
+    return sorted(results, key=lambda x: x.name.lower())
+
+
 def scan_games(input_dir):
-    """Escanea el directorio input en busca de archivos de Switch válidos."""
-    supported_exts = {'.nsp', '.xci', '.nsz', '.xcz'}
+    """Escanea el directorio input en busca de archivos de Switch válidos (Switch 1 y Switch 2)."""
+    supported_exts = {'.nsp', '.xci', '.nsz', '.xcz', '.nup'}
     files = []
     for ext in supported_exts:
         files.extend(list(input_dir.glob(f"*{ext}")))
         files.extend(list(input_dir.glob(f"*{ext.upper()}")))
 
     valid_files = [f for f in files if not f.name.startswith('._') and f.stat().st_size > 0]
+
+    # Agregar también carpetas extraídas de Switch 2
+    sw2_dirs = scan_switch2_games(input_dir)
+    for d in sw2_dirs:
+        if d not in valid_files:
+            valid_files.append(d)
+
     return sorted(valid_files, key=lambda x: x.name.lower())
 
 def group_games_by_title(files):
@@ -234,16 +320,31 @@ def main():
     args = parser.parse_args()
 
     # 1. Localizar prod.keys
+    # NOTA: Switch 2 con .nup o carpeta extraída NO requiere prod.keys
+    # Se intenta detectar la generación antes de pedir las claves
     keys_file = find_prod_keys(base_dir, args.keys)
-    if not keys_file:
+
+    # Detectar si el input es Switch 2 (para saber si prod.keys es obligatorio)
+    sw2_mode = False
+    if args.input:
+        sw_gen, sw_reason = detect_switch_generation(args.input)
+        if sw_gen == "switch2":
+            sw2_mode = True
+            print(f"{Colors.CYAN}[Switch 2] Formato detectado: {sw_reason}{Colors.END}")
+
+    if not keys_file and not sw2_mode:
         print(f"{Colors.RED}{Colors.BOLD}[!] Archivo 'prod.keys' no encontrado.{Colors.END}")
+        print(f"\n{Colors.YELLOW}Para Switch 1 (NSP/XCI/NSZ/XCZ), prod.keys es OBLIGATORIO.{Colors.END}")
         print(f"\n{Colors.YELLOW}Para continuar:{Colors.END}")
         print(f"1. Copia tu archivo {Colors.BOLD}prod.keys{Colors.END} en la carpeta:")
         print(f"   📂 {Colors.CYAN}{keys_dir}{Colors.END}")
         print(f"2. Vuelve a ejecutar este comando.\n")
+        print(f"{Colors.CYAN}Para juegos de Nintendo Switch 2 (.nup o carpetas extraídas), prod.keys NO es necesario.{Colors.END}\n")
         return 1
-
-    print(f"{Colors.GREEN}✓ prod.keys detectado:{Colors.END} {keys_file}")
+    elif not keys_file and sw2_mode:
+        print(f"{Colors.YELLOW}[Switch 2] Sin prod.keys — no necesario para este formato.{Colors.END}")
+    else:
+        print(f"{Colors.GREEN}✓ prod.keys detectado:{Colors.END} {keys_file}")
 
     # 2. Localizar Juegos
     target_dir = None
@@ -304,46 +405,69 @@ def main():
         games_found = scan_games(input_dir)
         if not games_found:
             print(f"{Colors.RED}{Colors.BOLD}[!] No se encontraron juegos en la carpeta 'input/'.{Colors.END}")
-            print(f"\n{Colors.YELLOW}Formatos admitidos:{Colors.END} .nsp, .xci, .nsz, .xcz")
+            print(f"\n{Colors.YELLOW}Formatos admitidos:{Colors.END}")
+            print(f"  Switch 1: .nsp, .xci, .nsz, .xcz")
+            print(f"  Switch 2: .nup, carpetas extraídas (TitleID/romfs + exefs)")
             print(f"\n{Colors.YELLOW}Pasos para compilar:{Colors.END}")
-            print(f"1. Coloca tu juego (junto con updates o DLCs si los tienes) en:")
+            print(f"1. Coloca tu juego en:")
             print(f"   📂 {Colors.CYAN}{input_dir}{Colors.END}")
             print(f"2. Vuelve a ejecutar {Colors.BOLD}./switch2ipa{Colors.END}\n")
             return 1
 
-        grouped = group_games_by_title(games_found)
-        if len(grouped) == 1:
-            selected_key = list(grouped.keys())[0]
-            game_files = grouped[selected_key]
-            print(f"{Colors.GREEN}✓ Juego detectado:{Colors.END}")
-            for gf in game_files:
-                size_mb = gf.stat().st_size / (1024 * 1024)
-                print(f"   • {gf.name} ({size_mb:.1f} MB)")
-            target_dir = input_dir
-            if len(selected_key) == 16:
-                target_title_id = selected_key
-        else:
-            print(f"\n{Colors.YELLOW}Se detectaron múltiples juegos en 'input/':{Colors.END}")
-            keys_list = list(grouped.keys())
-            for idx, k in enumerate(keys_list, start=1):
-                files = grouped[k]
-                base_file = files[0].name
-                print(f"  [{idx}] {base_file} (+{len(files)-1} archivos relacionados)")
+        # Separar juegos Switch 1 y Switch 2
+        sw1_games = [g for g in games_found if g.suffix.lower() in {'.nsp','.xci','.nsz','.xcz'}]
+        sw2_games = [g for g in games_found if g.suffix.lower() == '.nup' or g.is_dir()]
 
-            try:
-                choice = input(f"\nSelecciona el número del juego a compilar [1-{len(keys_list)}]: ").strip()
-                selected_idx = int(choice) - 1
-                if 0 <= selected_idx < len(keys_list):
-                    selected_key = keys_list[selected_idx]
-                    target_dir = input_dir
-                    if len(selected_key) == 16:
-                        target_title_id = selected_key
-                else:
-                    print(f"{Colors.RED}Selección inválida.{Colors.END}")
-                    return 1
-            except (ValueError, KeyboardInterrupt):
-                print(f"\nOperación cancelada.")
+        if sw2_games:
+            print(f"\n{Colors.CYAN}{Colors.BOLD}[Switch 2] {len(sw2_games)} juego(s) detectado(s):{Colors.END}")
+            for g in sw2_games:
+                label = "carpeta" if g.is_dir() else g.suffix
+                print(f"  🎮 {g.name} ({label})")
+            if len(sw2_games) == 1:
+                selected = sw2_games[0]
+                sw2_mode = True
+                target_dir = selected if selected.is_dir() else selected.parent
+                if re.match(r'^[0-9A-Fa-f]{16}$', selected.name):
+                    target_title_id = selected.name
+                print(f"{Colors.GREEN}✓ Switch 2 seleccionado: {selected.name}{Colors.END}")
+            else:
+                print(f"\n{Colors.YELLOW}Múltiples juegos Switch 2 — selecciona uno con --input <ruta>{Colors.END}")
                 return 1
+
+        grouped = group_games_by_title(sw1_games) if sw1_games else {}
+        if not sw2_mode and grouped:
+            if len(grouped) == 1:
+                selected_key = list(grouped.keys())[0]
+                game_files = grouped[selected_key]
+                print(f"{Colors.GREEN}✓ Juego Switch 1 detectado:{Colors.END}")
+                for gf in game_files:
+                    size_mb = gf.stat().st_size / (1024 * 1024)
+                    print(f"   • {gf.name} ({size_mb:.1f} MB)")
+                target_dir = input_dir
+                if len(selected_key) == 16:
+                    target_title_id = selected_key
+            else:
+                print(f"\n{Colors.YELLOW}Se detectaron múltiples juegos Switch 1 en 'input/':{Colors.END}")
+                keys_list = list(grouped.keys())
+                for idx, k in enumerate(keys_list, start=1):
+                    files_k = grouped[k]
+                    base_file = files_k[0].name
+                    print(f"  [{idx}] {base_file} (+{len(files_k)-1} archivos relacionados)")
+
+                try:
+                    choice = input(f"\nSelecciona el número del juego a compilar [1-{len(keys_list)}]: ").strip()
+                    selected_idx = int(choice) - 1
+                    if 0 <= selected_idx < len(keys_list):
+                        selected_key = keys_list[selected_idx]
+                        target_dir = input_dir
+                        if len(selected_key) == 16:
+                            target_title_id = selected_key
+                    else:
+                        print(f"{Colors.RED}Selección inválida.{Colors.END}")
+                        return 1
+                except (ValueError, KeyboardInterrupt):
+                    print(f"\nOperación cancelada.")
+                    return 1
 
     # 3. Validar Script Core
     if not build_script.exists():

@@ -1,14 +1,15 @@
 <div align="center">
 
 # 🎮 NSWPORTIOS
-### Universal Nintendo Switch to iOS (.IPA) Native Porter & Compiler
+### Universal Nintendo Switch & Switch 2 to iOS (.IPA) Native Porter & Compiler
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20iPadOS%20%7C%20macOS-lightgrey.svg)](https://apple.com)
 [![Architecture](https://img.shields.io/badge/Architecture-ARM64%20(aarch64)-orange.svg)]()
-[![Graphics](https://img.shields.io/badge/Graphics-Apple%20Metal-brightgreen.svg)]()
+[![Graphics](https://img.shields.io/badge/Graphics-Apple%20Metal%20NVN%2FNVN2-brightgreen.svg)]()
+[![Switch 2](https://img.shields.io/badge/Switch%202-NUP%20%2F%20Carpeta%20Extraida-red.svg)]()
 
-**NSWPORTIOS** es una suite gráfica y de línea de comandos para recompilar y portear juegos de **Nintendo Switch** directamente a **iOS / iPadOS (.IPA)** de forma nativa, sin emulación pesada y sin JIT.
+**NSWPORTIOS** es una suite gráfica y de línea de comandos para recompilar y portear juegos de **Nintendo Switch 1 y Switch 2** directamente a **iOS / iPadOS (.IPA)** de forma nativa, sin emulación pesada y sin JIT.
 
 ---
 
@@ -33,10 +34,11 @@ Desarrollado y mantenido por **thebusk2**:
 ## ✨ Características Principales
 
 - 🚀 **Ejecución Nativa ARM64** — El código del juego se ejecuta directamente en la CPU Apple Silicon / A-series, sin emulación
+- 🎮 **Switch 1 + Switch 2** — Soporte para NSP/XCI/NSZ/XCZ (Switch 1) y .NUP/carpetas extraídas (Switch 2)
 - 🎨 **Interfaz Visual Nintendo Switch** — Estética Joy-Con azul (#00BDE6) y rojo (#FF3C28)
 - 🌍 **5 Idiomas** — Español, English, Français, 日本語, Русский
-- 📦 **Formatos compatibles** — `.nsp`, `.xci`, `.nsz`, `.xcz` con detección automática
-- 🎮 **Soporte de Mandos iOS** — Pro Controller, Joy-Cons, DualSense, Xbox, MFi
+- 📦 **Formatos compatibles** — `.nsp`, `.xci`, `.nsz`, `.xcz`, `.nup` y carpetas extraídas
+- 🔑 **Sin prod.keys para Switch 2** — Los archivos `.nup` y carpetas extraídas no requieren claves
 - ⚡ **Shaders AOT** — Compilados antes de jugar para evitar stuttering
 
 ---
@@ -81,11 +83,71 @@ El instalador instala automáticamente:
 
 ## 🕹️ Uso
 
+### Switch 1 (NSP / XCI / NSZ / XCZ)
+
 1. Abre **`NSWPORTIOS.app`** (macOS) o ejecuta **`NSWPORTIOS.bat`** (Windows)
 2. Haz clic en **"Examinar..."** y selecciona tu juego (`.nsp`, `.xci`, `.nsz`, `.xcz`)
 3. Haz clic en **"Cargar Keys"** y selecciona tu archivo `prod.keys`
 4. Haz clic en **"🚀 COMPILAR A .IPA"**
 5. El archivo `.ipa` se guardará en la carpeta `output/`
+
+---
+
+## 🎮 Soporte Nintendo Switch 2
+
+NSWPORTIOS detecta automáticamente si tu juego es de **Switch 2** y adapta el pipeline.
+
+### Formatos soportados (Switch 2)
+
+| Formato | Descripción | prod.keys |
+|---------|-------------|-----------|
+| `.nup` | Archivo contenedor Switch 2 | ❌ No requerido |
+| `TitleID/romfs + exefs/` | Carpeta extraída directamente de la consola | ❌ No requerido |
+
+### Cómo volcar juegos de Switch 2
+
+Para obtener los archivos del juego de tu Nintendo Switch 2:
+
+1. **Instala un Custom Firmware** en tu Switch 2 (Atmosphère)
+2. **Descarga OunceCake** o **NX Dump Tool** (versión actualizada para Switch 2)
+3. Extrae el juego a una carpeta con estructura:
+   ```
+   input/
+   └── 040074A01BF12000/        ← TitleID del juego
+       ├── romfs/               ← assets, texturas, audio
+       ├── exefs/               ← binarios ejecutables
+       └── game.tsv             ← configuración NVN2
+   ```
+   O en formato `.nup`:
+   ```
+   input/
+   └── DonkeyKongBananza.nup
+   ```
+4. Coloca la carpeta o el archivo `.nup` en `input/`
+5. **NO necesitas prod.keys** para Switch 2
+6. Haz clic en **"🚀 COMPILAR"**
+
+### Juegos Switch 2 confirmados (nxnative)
+
+| Juego | Estado | Notas |
+|-------|--------|-------|
+| Donkey Kong Bananza | ✅ Funciona | 60 FPS en M4 Pro |
+| Splatoon Raiders | ✅ Arranca | Rendimiento variable |
+| Mario Kart World | ⚠️ Experimental | En desarrollo |
+| Hyrule Warriors: Age of Imprisonment | ⚠️ Experimental | En desarrollo |
+
+> **Hardware recomendado para correr Switch 2:** iPhone 15 Pro / 16 Pro / 17 Pro o iPad con chip M1 o superior.
+
+### Herramientas alternativas (GitHub)
+
+La comunidad ha desarrollado otras herramientas que también soportan Switch 2:
+
+| Herramienta | Repo | Descripción |
+|-------------|------|-------------|
+| NX2Apple | `LNPANDY/NX2Apple` | GUI para macOS, acepta .nup sin terminal |
+| LumaNX | `Xc1Ym/LumaNX` | Gestor de biblioteca con SwiftUI |
+| ns2ios-shell | `xinerqu/ns2ios-shell` | **Windows/Linux sin Xcode** — usa CI de GitHub |
+| NX Play | `varyform/nx-native-wrapper` | Gestión de guardados y múltiples juegos |
 
 ---
 

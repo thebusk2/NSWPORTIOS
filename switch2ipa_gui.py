@@ -31,8 +31,8 @@ I18N = {
         "title": "NSWPORTIOS",
         "subtitle": "Porteador Nativo de Switch a iOS • Metal 3.0 & ARM64",
         "open_in": "📂 Abrir Input", "open_out": "📦 Abrir Output", "credits": "❤️ Créditos",
-        "card_game": " 🎮 JUEGO DE NINTENDO SWITCH ", "no_game": "Ningún juego seleccionado",
-        "formats_hint": "Formatos admitidos: .nsp, .xci, .nsz, .xcz", "browse": "Examinar...",
+        "card_game": " 🎮 JUEGO DE NINTENDO SWITCH / SWITCH 2 ", "no_game": "Ningún juego seleccionado",
+        "formats_hint": "Switch 1: .nsp .xci .nsz .xcz  |  Switch 2: .nup o carpeta extraída", "browse": "Examinar...",
         "card_keys": " 🔑 LLAVES DE DESENCRIPTADO (PROD.KEYS) ",
         "keys_ok": "✓ Detectado:", "keys_err": "⚠️ 'prod.keys' no encontrado. Copia el archivo en 'keys/'",
         "load_keys": "Cargar Keys", "card_opts": " ⚙️ AJUSTES DE COMPILACIÓN ",
@@ -48,8 +48,8 @@ I18N = {
         "title": "NSWPORTIOS",
         "subtitle": "Switch to iOS Native Porter • Metal 3.0 & ARM64",
         "open_in": "📂 Open Input", "open_out": "📦 Open Output", "credits": "❤️ Credits",
-        "card_game": " 🎮 NINTENDO SWITCH GAME ", "no_game": "No game selected",
-        "formats_hint": "Supported formats: .nsp, .xci, .nsz, .xcz", "browse": "Browse...",
+        "card_game": " 🎮 NINTENDO SWITCH / SWITCH 2 GAME ", "no_game": "No game selected",
+        "formats_hint": "Switch 1: .nsp .xci .nsz .xcz  |  Switch 2: .nup or extracted folder", "browse": "Browse...",
         "card_keys": " 🔑 DECRYPTION KEYS (PROD.KEYS) ",
         "keys_ok": "✓ Detected:", "keys_err": "⚠️ 'prod.keys' not found. Copy it into 'keys/'",
         "load_keys": "Load Keys", "card_opts": " ⚙️ BUILD SETTINGS ",
@@ -65,8 +65,8 @@ I18N = {
         "title": "NSWPORTIOS",
         "subtitle": "Porteur Natif Switch vers iOS • Metal 3.0 & ARM64",
         "open_in": "📂 Ouvrir Input", "open_out": "📦 Ouvrir Output", "credits": "❤️ Crédits",
-        "card_game": " 🎮 JEU NINTENDO SWITCH ", "no_game": "Aucun jeu sélectionné",
-        "formats_hint": "Formats pris en charge : .nsp, .xci, .nsz, .xcz", "browse": "Parcourir...",
+        "card_game": " 🎮 JEU NINTENDO SWITCH / SWITCH 2 ", "no_game": "Aucun jeu sélectionné",
+        "formats_hint": "Switch 1 : .nsp .xci .nsz .xcz  |  Switch 2 : .nup ou dossier extrait", "browse": "Parcourir...",
         "card_keys": " 🔑 CLÉS DE DÉCHIFFREMENT (PROD.KEYS) ",
         "keys_ok": "✓ Détecté :", "keys_err": "⚠️ 'prod.keys' introuvable. Copiez-le dans 'keys/'",
         "load_keys": "Charger clés", "card_opts": " ⚙️ PARAMÈTRES DE COMPILATION ",
@@ -82,8 +82,8 @@ I18N = {
         "title": "NSWPORTIOS",
         "subtitle": "Switch から iOS へのネイティブ移植 • Metal 3.0 & ARM64",
         "open_in": "📂 Input を開く", "open_out": "📦 Output を開く", "credits": "❤️ クレジット",
-        "card_game": " 🎮 NINTENDO SWITCH ゲーム ", "no_game": "ゲームが選択されていません",
-        "formats_hint": "対応フォーマット: .nsp, .xci, .nsz, .xcz", "browse": "参照...",
+        "card_game": " 🎮 NINTENDO SWITCH / SWITCH 2 ゲーム ", "no_game": "ゲームが選択されていません",
+        "formats_hint": "Switch 1: .nsp .xci .nsz .xcz  |  Switch 2: .nup または展開フォルダ", "browse": "参照...",
         "card_keys": " 🔑 復号キー (PROD.KEYS) ",
         "keys_ok": "✓ 検出済み:", "keys_err": "⚠️ 'prod.keys' が見つかりません。'keys/' に配置してください",
         "load_keys": "キー読み込み", "card_opts": " ⚙️ ビルド設定 ",
@@ -99,8 +99,8 @@ I18N = {
         "title": "NSWPORTIOS",
         "subtitle": "Нативный порт Switch на iOS • Metal 3.0 & ARM64",
         "open_in": "📂 Открыть Input", "open_out": "📦 Открыть Output", "credits": "❤️ Создатели",
-        "card_game": " 🎮 ИГРА NINTENDO SWITCH ", "no_game": "Игра не выбрана",
-        "formats_hint": "Поддерживаемые форматы: .nsp, .xci, .nsz, .xcz", "browse": "Обзор...",
+        "card_game": " 🎮 ИГРА NINTENDO SWITCH / SWITCH 2 ", "no_game": "Игра не выбрана",
+        "formats_hint": "Switch 1: .nsp .xci .nsz .xcz  |  Switch 2: .nup или извлечённая папка", "browse": "Обзор...",
         "card_keys": " 🔑 КЛЮЧИ ДЕШИФРОВАНИЯ (PROD.KEYS) ",
         "keys_ok": "✓ Обнаружено:", "keys_err": "⚠️ 'prod.keys' не найден. Скопируйте в 'keys/'",
         "load_keys": "Загрузить ключи", "card_opts": " ⚙️ ПАРАМЕТРЫ СБОРКИ ",
@@ -373,25 +373,63 @@ class NSWPortIOSGUI(tk.Tk):
     def detect_game_in_input(self):
         input_dir = self.base_dir / "input"
         if not input_dir.exists(): return
-        valid_exts = {".nsp", ".xci", ".nsz", ".xcz"}
+        # Switch 1: archivos NSP/XCI/NSZ/XCZ
+        valid_exts = {".nsp", ".xci", ".nsz", ".xcz", ".nup"}
         for f in input_dir.iterdir():
             if f.is_file() and not f.name.startswith("._") and f.suffix.lower() in valid_exts:
                 self.select_game(f)
-                break
-                
+                return
+        # Switch 2: carpetas extraídas con romfs/exefs
+        import re as _re
+        for d in input_dir.iterdir():
+            if d.is_dir() and not d.name.startswith('.'):
+                has_romfs = (d / "romfs").exists()
+                has_exefs = (d / "exefs").exists()
+                if has_romfs and has_exefs:
+                    self.select_game(d)
+                    return
+
     def select_game(self, path):
+        import re as _re
         path = Path(path)
         self.var_game_path.set(str(path))
-        size_mb = path.stat().st_size / (1024 * 1024)
-        size_str = f"{size_mb / 1024:.2f} GB" if size_mb > 1024 else f"{size_mb:.1f} MB"
-        self.var_game_info.set(f"{path.name}  [{path.suffix.upper()[1:]} • {size_str}]")
-        
+        if path.is_dir():
+            # Carpeta extraída Switch 2
+            gen_label = "Switch 2 - Carpeta Extraída"
+            self.var_game_info.set(f"📁 {path.name}  [{gen_label}]")
+        else:
+            size_mb = path.stat().st_size / (1024 * 1024)
+            size_str = f"{size_mb / 1024:.2f} GB" if size_mb > 1024 else f"{size_mb:.1f} MB"
+            gen = "Switch 2" if path.suffix.lower() == ".nup" else "Switch 1"
+            ext_label = path.suffix.upper()[1:]
+            self.var_game_info.set(f"{path.name}  [{gen} • {ext_label} • {size_str}]")
+
     def pick_game(self):
-        f = filedialog.askopenfilename(
-            title=self.t("card_game"),
-            filetypes=[("Nintendo Switch Games", "*.nsp *.xci *.nsz *.xcz *.NSP *.XCI *.NSZ *.XCZ")]
+        # Preguntar si quiere archivo o carpeta (Switch 2 usa carpeta)
+        choice = messagebox.askquestion(
+            "Tipo de juego",
+            "¿Es un juego de Nintendo Switch 2?\n\n"
+            "• Sí → Seleccionar carpeta extraída (romfs/exefs)\n"
+            "• No → Seleccionar archivo .nsp/.xci/.nsz/.xcz/.nup",
+            icon='question'
         )
-        if f: self.select_game(f)
+        if choice == 'yes':
+            # Seleccionar carpeta (Switch 2)
+            d = filedialog.askdirectory(title="Seleccionar carpeta del juego Switch 2 (con romfs/ y exefs/)")
+            if d:
+                self.select_game(Path(d))
+        else:
+            # Seleccionar archivo (Switch 1 o .nup Switch 2)
+            f = filedialog.askopenfilename(
+                title=self.t("card_game"),
+                filetypes=[
+                    ("Todos los juegos Switch", "*.nsp *.xci *.nsz *.xcz *.nup *.NSP *.XCI *.NSZ *.XCZ *.NUP"),
+                    ("Switch 1 (NSP/XCI/NSZ/XCZ)", "*.nsp *.xci *.nsz *.xcz"),
+                    ("Switch 2 (NUP)", "*.nup"),
+                ]
+            )
+            if f:
+                self.select_game(f)
         
     def pick_keys(self):
         f = filedialog.askopenfilename(
@@ -472,8 +510,19 @@ class NSWPortIOSGUI(tk.Tk):
         if not game:
             messagebox.showwarning("Atención", self.t("no_game"))
             return
-        if not keys:
-            messagebox.showwarning("Atención", self.t("keys_err"))
+
+        # Switch 2 (.nup o carpeta) NO requiere prod.keys
+        game_path = Path(game)
+        is_switch2 = (game_path.is_dir() or
+                      (game_path.is_file() and game_path.suffix.lower() == '.nup'))
+
+        if not keys and not is_switch2:
+            messagebox.showwarning("Atención",
+                "prod.keys no encontrado.\n\n"
+                "• Switch 1 (NSP/XCI/NSZ/XCZ): prod.keys OBLIGATORIO\n"
+                "• Switch 2 (NUP/carpeta): prod.keys NO necesario\n\n"
+                "Coloca prod.keys en la carpeta 'keys/' y vuelve a intentarlo."
+            )
             return
             
         self.btn_compile.config(state=tk.DISABLED, bg="#555555")
@@ -485,21 +534,34 @@ class NSWPortIOSGUI(tk.Tk):
         
     def _run_process(self):
         script = self.base_dir / "switch2ipa.py"
-        
+
         # Usar Python del venv si existe
         venv_py = Path.home() / ".nswportios_venv" / "bin" / "python3"
         py_exec = str(venv_py) if venv_py.exists() else sys.executable
-        
+
+        game_path_str = self.var_game_path.get()
+        keys_path_str = self.var_keys_path.get()
+        game_path = Path(game_path_str)
+
+        # Detectar Switch 2 para no pasar -k si no hay keys
+        is_switch2 = (game_path.is_dir() or
+                      (game_path.is_file() and game_path.suffix.lower() == '.nup'))
+
         cmd = [
             py_exec, str(script),
-            "-i", self.var_game_path.get(),
-            "-k", self.var_keys_path.get(),
+            "-i", game_path_str,
             "-l", self.var_game_lang.get(),
             "--platform", self.var_platform.get(),
             "--romfs", self.var_romfs.get(),
         ]
-        if self.var_fps.get(): cmd.append("--fps")
-        else: cmd.append("--no-fps")
+        # Solo pasar -k si hay keys y no es Switch 2 sin keys
+        if keys_path_str:
+            cmd.extend(["-k", keys_path_str])
+
+        if self.var_fps.get():
+            cmd.append("--fps")
+        else:
+            cmd.append("--no-fps")
         
         env = os.environ.copy()
         extra_paths = [
